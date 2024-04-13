@@ -2,6 +2,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from tabulate import tabulate
+from scipy.interpolate import interp1d
+from scipy.interpolate import UnivariateSpline
+from scipy.optimize import curve_fit
+#from scipy.signal import savitzky_golay
 
 
 #############################              Script by Carlos Acosta              #############################
@@ -15,9 +19,9 @@ sustance = 'Isobutano'
 
 
 w = 0.181
-TcK = 408.1 + 10
+TcK = 408.1 
 PcBar = 36.48
-tfus = 142
+tfus = 113.8
 
 def generate_Temperature(tcritic, n, tfus):
     
@@ -27,16 +31,21 @@ def generate_Temperature(tcritic, n, tfus):
 
     temperatures = []
 
+    temperatures_tYPE = [
+                        113.8, 120, 140, 160, 180, 200, 220, 240, 260, 270, 280, 290, 300, 
+                        310, 320, 330, 340, 350, 360, 370, 380, 390, 400, 408.1
+                         ]
+    '''
     while (sum < tcritic):
 
         temperatures.append(round(sum, 2))
         # Calcular el nuevo valor de la suma sumando el valor de "fact"
         sum += fact
         # Verificar si la suma supera 407
-        if sum >= (tcritic-2):
+        if sum >= (tcritic):
             break  # Salir del bucle si la suma supera 407
-
-    return temperatures
+    '''
+    return temperatures_tYPE
 
 def generate_Pressure(pcritic, n):
     
@@ -45,6 +54,16 @@ def generate_Pressure(pcritic, n):
     fact = pcritic / n
 
     pressures = []
+
+    
+
+    pressures_TYPE = [0.00000019, 0.00000093, 0.000048, 0.00082, 0.007, 0.0369, 0.1374, 0.3989, 0.9600, 1.4081,
+                     2.0020, 2.7686, 3.7365, 4.9340, 6.3920, 8.1400, 10.2100, 12.6400, 15.4600, 18.7200, 22.4800, 
+                     26.8200, 31.8600, 36.4976
+                     ]
+    
+
+
 
     while (sum < pcritic):
 
@@ -55,7 +74,7 @@ def generate_Pressure(pcritic, n):
         if sum >= (pcritic-0.5):
             break  # Salir del bucle si la suma supera 407
 
-    return pressures
+    return pressures_TYPE
 
 ###################################             NO  Modify               ####################################
 print("__________________________________________________________________\n")
@@ -96,9 +115,6 @@ print(tabulate(combined_data, headers=["Temperatura (K)", "Presion (Bar)"], tabl
 
 
 ######################################              SRK               #######################################
-
-
-
 
 def calculate_Tr_values(temperatures, tcritic):
     Tr_values = []
@@ -163,38 +179,65 @@ generate_table(temperatures, pressures, Tr_values, Pr_values, Alfa_values, A_val
 
 ##################################            Newton Raphson              ##################################
 
-def newton_raphson_method(A_values, B_values):
-    # Función F(z) y su derivada F'(z)
+def newton_raphson_met1(A, B, tolerancia=1e-8, max_iter=1000):
+    # Funcion F(z) y su derivada F'(z)
     def F(Z, A, B):
-        return (Z**3) - (Z**2) + (Z * (A - B - B**2)) - (A * B)
+        return Z ** 3 - Z ** 2 + Z * (A - B - B ** 2) - A * B
 
     def F_prime(Z, A, B):
-        return (3 * Z**2) - (2*Z) + (A - B - B**2)
+        return 3 * Z ** 2 - 2 * Z + (A - B - 2 * B ** 2)
+
+    # Estimacion inicial para Z
+    Z = 0
+    F_values = []
+    F_prime_values = []
+
 
     # Proceso iterativo del metodo de Newton-Raphson
-    Z = 1 # Idealidad
-    while True:
-        # Evaluar F(Z) y su derivada en Z
-        F_Z = F(Z, A_values, B_values)
-        F_prime_Z = F_prime(Z, A_values, B_values)
+    for _ in range(max_iter):
+        F_Z = F(Z, A, B)
+        F_prime_Z = F_prime(Z, A, B)
 
-        # Verificar si la derivada se esta acercando a cero
-        if abs(F_prime_Z) < 1e-8:
-            # La derivada se está acercando a cero, detener la funcion
+        F_values.append(round(F_Z, 8))
+        F_prime_values.append(round(F_prime_Z, 8))
+
+        if abs(F_prime_Z) < tolerancia:
             break
 
-        # Actualizar Z utilizando la formula del método de Newton-Raphson
-        Z_prime = Z - (F_Z / F_prime_Z)
+        Z -= F_Z / F_prime_Z
 
-        # Verificar convergencia (si Z no cambia o la diferencia es menor que 1e-8)
-        if round(Z_prime, 8) == round(Z, 8):
-            return round(Z_prime, 8)  # Devolver el valor de Z con hasta 8 
+    return round(Z, 8)#, F_values, F_prime_values
 
-        # Actualizar Z para la proxima iteracion...
-        Z = Z_prime
 
-    return round(Z, 8)  # Devolver el valor de Z con hasta 8
+def newton_raphson_met2(A, B, tolerancia=1e-8, max_iter=1000):
+    
+    def F(Z, A, B):
+        return Z ** 3 - Z ** 2 + Z * (A - B - B ** 2) - A * B
 
+    def F_prime(Z, A, B):
+        return 3 * Z ** 2 - 2 * Z + (A - B - 2 * B ** 2)
+
+    
+    Z = 1
+    F_values = []
+    F_prime_values = []
+
+
+    
+    for _ in range(max_iter):
+        F_Z = F(Z, A, B)
+        F_prime_Z = F_prime(Z, A, B)
+
+        F_values.append(round(F_Z, 8))
+        F_prime_values.append(round(F_prime_Z, 8))
+
+
+        if abs(F_prime_Z) < tolerancia:
+            break
+
+        Z -= F_Z / F_prime_Z
+
+    return round(Z, 8)#, F_values, F_prime_values
 
 
 
@@ -208,10 +251,13 @@ def generate_table_with_Z(temperatures, pressures, Tr_values, Pr_values, Alpha_v
 
     # Imprimir la tabla
     headers = ["Temperatura (K)", "Presion (Bar)", "Tr", "Pr", "Alpha", "A", "B", "Z", "Volumen específico"]
-    v_values = calculate_specific_Volume(Z_values, temperatures, pressures)
+    v_values = calculate_specific_Volume(Z_values, temperatures, temperatures)
     for data, v in zip(combined_data, v_values):
         data.append(v)
     print(tabulate(combined_data, headers=headers, tablefmt="fancy_grid", showindex=False))
+
+
+
 
 
 
@@ -233,24 +279,109 @@ def calculate_specific_Volume(Z_values, temperatures, pressures):
 #Z_values = [newton_raphson_method(A_values, B_values) for _ in range(num_Data)]   
 #Z_values = [newton_raphson_method(A, B) for A, B in zip(A_values, B_values)]
 
-Z_values = [newton_raphson_method(A, B) for A, B in zip(A_values, B_values)]
+Z1_values = [newton_raphson_met1(A, B) for A, B in zip(A_values, B_values)]
+Z2_values = [newton_raphson_met2(A, B) for A, B in zip(A_values, B_values)]
 
-specific_Volume = calculate_specific_Volume(Z_values, temperatures, pressures)[1:]
+
+specific_Volumez1 = calculate_specific_Volume(Z1_values, temperatures, pressures)[1:]   # OJOOOOO
+specific_Volumez2 = calculate_specific_Volume(Z2_values, temperatures, pressures)[1:]
+
+
 
 # Generar la tabla con los valores de Z
-generate_table_with_Z(temperatures, pressures, Tr_values, Pr_values, Alfa_values, A_values, B_values, Z_values)
+generate_table_with_Z(temperatures, pressures, Tr_values, Pr_values, Alfa_values, A_values, B_values, Z1_values)
+generate_table_with_Z(temperatures, pressures, Tr_values, Pr_values, Alfa_values, A_values, B_values, Z2_values)
 
 
 
-# Grafico
+# Crear un DataFrame de pandas con los datos de la tabla
+df1 = pd.DataFrame({
+    "Temperatura (K)": temperatures,
+    "Presion(Bar)": pressures,
+    "Tr": Tr_values,
+    "Pr": Pr_values,
+    "Alfa": Alfa_values,
+    "A": A_values,
+    "B": B_values,
+    "Z": Z1_values
+})
 
-plt.plot(calculate_specific_Volume(Z_values, temperatures, temperatures)[1:], pressures[1:], marker='o', linestyle='-')
+df2 = pd.DataFrame({
+    "Temperatura (K)": temperatures,
+    "Presion(Bar)": pressures,
+    "Tr": Tr_values,
+    "Pr": Pr_values,
+    "Alfa": Alfa_values,
+    "A": A_values,
+    "B": B_values,
+    "Z": Z2_values
+})
+
+'''
+# Guardar el DataFrame como un archivo Excel
+name_Data = "datos_temperatura_presionTEST003.xlsx"
+nombre_hoja1 = "Hoja1"  # Nombre de la primera hoja
+nombre_hoja2 = "Hoja2"  # Nombre de la segunda hoja
+with pd.ExcelWriter(name_Data) as writer:
+    df1.to_excel(writer, sheet_name=nombre_hoja1, index=False)
+    df2.to_excel(writer, sheet_name=nombre_hoja2, index=False)
+
+print(f"Los datos se han exportado correctamente a '{name_Data}'")
+'''
+
+
+#\ Grafico
+
+plt.plot(calculate_specific_Volume(Z1_values, temperatures, pressures), pressures, marker='o', linestyle='-')
 plt.xlabel('Volumen Específico')
 plt.ylabel('Temperatura (K)')
-plt.title('Gráfico de Líneas: Volumen Específico vs. Temperatura')
+plt.title('Gráfico de Líneas: Volumen Específico vs. Presion')
 plt.grid(True)
 plt.show()
 
+plt.plot(calculate_specific_Volume(Z2_values, temperatures, temperatures), pressures, marker='o', linestyle='-')
+plt.xlabel('Volumen Específico')
+plt.ylabel('Temperatura (K)')
+plt.title('Gráfico de Líneas: Volumen Específico vs. Presion')
+plt.grid(True)
+plt.show()
+
+
+
+# Gráfico de Z1_values
+plt.plot(calculate_specific_Volume(Z1_values, temperatures, temperatures), pressures, marker='o', linestyle='-', label='Z1')
+
+ #Gráfico de Z2_values
+plt.plot(calculate_specific_Volume(Z2_values, temperatures, temperatures), pressures, marker='o', linestyle='-', label='Z2')
+
+'''
+#Isotermas
+'''
+plt.xlabel('Volumen Específico')
+plt.ylabel('Presion (Bar)')
+plt.title('Gráfico de Líneas: Volumen Específico vs. Presion')
+plt.grid(True)
+plt.legend()  # Mostrar leyenda con etiquetas Z1 y Z2
+plt.show()
+
+
+
+
+volumen_Z1 = calculate_specific_Volume(Z1_values, temperatures, temperatures)
+volumen_Z2 = calculate_specific_Volume(Z2_values, temperatures, temperatures)
+
+
+# Crea un DataFrame de pandas con los valores de volumen específico y presión
+data = {'Presión': pressures,
+        'Volumen Específico Z1': volumen_Z1,
+        'Volumen Específico Z2': volumen_Z2,
+        }
+
+dfz = pd.DataFrame(data)
+
+# Imprime el DataFrame
+print("Tabla de valores:")
+print(dfz)
 
 
 
